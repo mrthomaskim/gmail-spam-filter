@@ -52,6 +52,7 @@ Then delete the local credentials:
 ```bash
 rm token.json client_secret.json
 ```
+If the token ever stops working (`invalid_grant` in the logs), see [REAUTH.md](REAUTH.md).
 
 ## 6. Budget alert
 Console → Billing → **Budgets & alerts** → Create budget → $1/month, alert at 50/90/100%.
@@ -73,11 +74,14 @@ gcloud functions logs read gmail-filter --gen2 --region=us-central1 --limit=50
 dots, dashes, underscores, spaces, emoji, accents, and maps 1/0/3/5 → i/o/e/s), then re-run
 `./deploy.sh`. No need for token.json on re-runs.
 
+**Re-authenticate Gmail:** if the filter stops moving mail with `invalid_grant` errors,
+get a new token and upload it with `./update_token.sh` — see [REAUTH.md](REAUTH.md).
+
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `invalid_grant` in logs | Token revoked or app was in Testing mode. Publish app (step 2), re-run step 4, then `./deploy.sh`. |
+| `invalid_grant` in logs | Token revoked or app was in Testing mode. Publish app (step 2), then follow [REAUTH.md](REAUTH.md). |
 | Watch call: `User not authorized to perform this action` | Pub/Sub publisher binding for `gmail-api-push@system.gserviceaccount.com` missing — re-run `./deploy.sh`. |
 | Push function never fires (project created before Apr 2021) | Grant the Pub/Sub service agent `roles/iam.serviceAccountTokenCreator` on the project. |
 | Rows not appearing in Sheet | Check `SHEET_ID` and that the sheet is owned by/shared with your Gmail account. Filtering still works without it. |

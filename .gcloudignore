@@ -7,3 +7,5 @@ README.md
 deploy.sh
 get_token.py
 #!include:.gitignore
+REAUTH.md
+update_token.sh
