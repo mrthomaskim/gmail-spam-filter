@@ -1,0 +1,19 @@
+# OAuth credentials — never commit
+client_secret*.json
+token.json
+*.pem
+*.key
+.env
+.env.*
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Local tool / editor state
+.claude/settings.local.json
+.DS_Store
+.idea/
+.vscode/

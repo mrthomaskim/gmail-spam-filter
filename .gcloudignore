@@ -1,0 +1,9 @@
+# Files excluded from the Cloud Functions source upload (deploy.sh uses --source=.)
+.gcloudignore
+.git
+.gitignore
+.claude/
+README.md
+deploy.sh
+get_token.py
+#!include:.gitignore
