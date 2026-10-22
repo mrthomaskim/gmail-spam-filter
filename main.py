@@ -14,6 +14,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import functions_framework
+from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
@@ -82,10 +83,8 @@ def classify(frm: str, subject: str, to: str):
             return f"keyword: {k}"
     if re.search(r"@gmail\.com@|random_anm", to, re.I):
         return "broken To field"
-    if len(re.findall(r"\.ltd", frm, re.I)) >= 2:  # e.g. "x.Ltd0.0.Ltd.MCK0.Ltd@..."
+    if len(re.findall(r"(?=\.Ltd\.)", frm, re.I)) >= 2:  # segments may have words between them
         return "junk sender pattern"
-    if re.search(r"\s{40,}", subject) and re.search(r"[A-Za-z0-9]{80,}", subject):
-        return "padded subject"  # visible subject + whitespace + random blob
     return None
 
 
@@ -105,10 +104,9 @@ def log_rows(rows):
         print(json.dumps({"severity": "WARNING", "message": f"sheet log failed: {e}"}))
 
 
-# Gmail allows 6,000 quota units per user per minute (see the Gmail API
-# Quotas page; the old 15,000 limit is "Previous quota"); messages.get costs 5.
-# 15 gets/sec = 4,500 units/min, leaving headroom for the push function.
-GETS_PER_SECOND = 15
+# Gmail allows 15,000 quota units per user per minute; messages.get costs 5.
+# 30 gets/sec = 9,000 units/min, leaving headroom for the push function.
+GETS_PER_SECOND = 30
 RETRIES = 6  # client retries 429/403-rateLimitExceeded/5xx with exponential backoff
 FLUSH_EVERY = 100  # move + log in chunks so a timeout never loses finished work
 
@@ -172,7 +170,14 @@ def on_gmail_push(cloud_event):
     # The notification only says "inbox changed"; we don't need its historyId.
     # Scanning a short recent window is stateless and self-healing.
     after = int(time.time()) - LOOKBACK_SECONDS
-    checked, moved, _ = scan(f"in:inbox after:{after}")
+    try:
+        checked, moved, _ = scan(f"in:inbox after:{after}")
+    except RefreshError as e:
+        # Token expired/revoked: retrying can't help, so log once and ack the message.
+        # Fix: python get_token.py && ./deploy.sh
+        print(json.dumps({"severity": "CRITICAL", "message": "gmail token invalid_grant",
+                          "error": str(e)[:200]}))
+        return
     print(json.dumps({"severity": "INFO", "message": "push scan", "checked": checked, "moved": moved}))
 
 
