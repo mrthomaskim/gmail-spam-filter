@@ -6,6 +6,7 @@ set -euo pipefail
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID}"
 REGION="${REGION:-us-central1}"
 SHEET_ID="${SHEET_ID:-}"          # optional: Google Sheet to log moved mail
+MY_EMAIL="${MY_EMAIL:-}"          # optional: your address, enables the username-in-subject signal
 TOPIC="gmail-push"
 SECRET="gmail-oauth-token"
 SA_NAME="gmail-filter"
@@ -47,7 +48,7 @@ gcloud secrets add-iam-policy-binding "$SECRET" \
 COMMON=(--gen2 --region="$REGION" --runtime=python312 --source=.
         --service-account="$SA"
         --set-secrets="TOKEN_JSON=${SECRET}:latest"
-        --set-env-vars="SHEET_ID=${SHEET_ID},TOPIC=${TOPIC_PATH}"
+        --set-env-vars="SHEET_ID=${SHEET_ID},TOPIC=${TOPIC_PATH},MY_EMAIL=${MY_EMAIL}"
         --memory=256Mi)
 
 echo "==> Deploying push handler"

@@ -1,0 +1,14 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+functions-framework = "==3.*"
+google-api-python-client = ">=2.100"
+google-auth = ">=2.20"
+
+[dev-packages]
+
+[requires]
+python_version = "3.13"
