@@ -11,6 +11,7 @@ import re
 import time
 import unicodedata
 from datetime import datetime
+from email.utils import getaddresses
 from zoneinfo import ZoneInfo
 
 import functions_framework
@@ -76,15 +77,65 @@ def normalize(s: str) -> str:
     return re.sub(r"[^a-z]", "", s)
 
 
-def classify(frm: str, subject: str, to: str):
+# --- structural rules -------------------------------------------------------
+# Strong signals move a message on their own. Weak signals need two or more together,
+# so a single coincidence (a receipt with "$9.99/mo", a GitHub mail naming your
+# username) never sends real mail to Spam.
+FORGED_ADDR = re.compile(r"[^\s<>,;\"]+@[^\s<>,;\"]+@|random_anm", re.I)   # a@b.com@c.net
+INVISIBLE = re.compile("[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]")
+ODD_SCRIPT = re.compile("[\u0400-\u04ff\u0590-\u05ff\u0600-\u06ff]")      # Cyrillic, Hebrew, Arabic
+LATIN = re.compile("[A-Za-z]")
+PER_MONTH = re.compile(r"\$\s?\d+(?:\.\d\d)?\s*(?:/|per\s*)?\s*mo(?:nth)?\b", re.I)
+MY_EMAIL = os.environ.get("MY_EMAIL", "").lower()   # set in deploy.sh; enables the username rule
+EMAILISH = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def recipients(*headers):
+    """[(display name, address)] across To/Cc/Bcc."""
+    return [(n.strip().lower(), a.strip().lower()) for n, a in getaddresses(list(headers)) if a]
+
+
+def bad_recipient_domain(rcpts):
+    # '"me@gmail.com" <me@90538>': a domain with no dot can't receive internet mail.
+    return any("@" in a and "." not in a.rsplit("@", 1)[1] for _, a in rcpts)
+
+
+def spoofed_recipient_name(rcpts):
+    # '"me@outlook.com" <stranger@junk.com>': the display name is a different address.
+    return any(EMAILISH.match(n) and n != a for n, a in rcpts)
+
+
+def weak_signals(frm: str, subject: str, rcpts=()):
+    found = []
+    if spoofed_recipient_name(rcpts):
+        found.append("recipient name is a different address")
+    if INVISIBLE.search(subject) or INVISIBLE.search(frm):
+        found.append("invisible characters")
+    if LATIN.search(subject) and ODD_SCRIPT.search(subject):
+        found.append("mixed-script subject")       # Hangul/CJK are deliberately not counted
+    local = normalize(MY_EMAIL.split("@")[0])
+    if len(local) >= 6 and local[:8] in normalize(subject):
+        found.append("your username in subject")
+    if PER_MONTH.search(subject):
+        found.append("price per month in subject")
+    return found
+
+
+def classify(frm: str, subject: str, to: str, cc: str = "", bcc: str = ""):
     text = normalize(f"{frm} {subject}")
     for k in KEYWORDS:
         if k in text:
             return f"keyword: {k}"
-    if re.search(r"@gmail\.com@|random_anm", to, re.I):
-        return "broken To field"
+    if FORGED_ADDR.search(f"{to} {cc} {bcc}"):
+        return "forged recipient address"
+    rcpts = recipients(to, cc, bcc)
+    if bad_recipient_domain(rcpts):
+        return "recipient domain has no dot"
     if len(re.findall(r"(?=\.Ltd\.)", frm, re.I)) >= 2:  # segments may have words between them
         return "junk sender pattern"
+    weak = weak_signals(frm, subject, rcpts)
+    if len(weak) >= 2:
+        return "signals: " + ", ".join(weak)
     return None
 
 
@@ -142,12 +193,12 @@ def scan(query: str, time_budget: float = None):
         t0 = time.monotonic()
         msg = svc.messages().get(
             userId="me", id=mid, format="metadata",
-            metadataHeaders=["From", "Subject", "To"],
+            metadataHeaders=["From", "Subject", "To", "Cc", "Bcc"],
         ).execute(num_retries=RETRIES)
         checked += 1
         h = {x["name"].lower(): x["value"] for x in msg.get("payload", {}).get("headers", [])}
         frm, subject, to = h.get("from", ""), h.get("subject", ""), h.get("to", "")
-        reason = classify(frm, subject, to)
+        reason = classify(frm, subject, to, h.get("cc", ""), h.get("bcc", ""))
         if reason:
             hits.append(mid)
             rows.append([datetime.now(LOG_TZ).strftime("%Y-%m-%d %H:%M:%S"), frm, subject, reason])
