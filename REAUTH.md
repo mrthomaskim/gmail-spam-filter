@@ -22,6 +22,12 @@ Common causes:
 | Token unused for 6 months | Nothing to do — the daily watch renewal keeps it in use |
 | OAuth client deleted or its secret reset | Downloading the new `client_secret.json` first (step 1) |
 
+> If **Publish app** is greyed out, the **Branding** page is incomplete. Fill in the app
+> name, user support email, and developer contact email. Leave the logo and authorized
+> domains empty, since either one triggers brand verification. Tokens issued while in
+> Testing keep their 7-day expiry, so get a new one (steps 2 and 3) after publishing.
+> The "unverified app" warning stays, which is fine for personal use.
+
 ## 1. Get `client_secret.json`
 
 It's gitignored, so you may have deleted it after the first setup. If so:

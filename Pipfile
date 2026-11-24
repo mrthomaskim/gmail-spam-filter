@@ -7,8 +7,9 @@ name = "pypi"
 functions-framework = "==3.*"
 google-api-python-client = ">=2.100"
 google-auth = ">=2.20"
+google-auth-oauthlib = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.13"
+python_version = "3.14"
